@@ -1,0 +1,6 @@
+{
+  "name": "ديوني",
+  "description": "نظام أنيق وهادئ لإدارة الديون والمستحقات، مقسم بحسب التبويبات المخصصة والتذكيرات والمزامنة الآمنة بسلاسة.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
