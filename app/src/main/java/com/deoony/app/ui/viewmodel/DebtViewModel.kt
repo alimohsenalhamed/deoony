@@ -157,13 +157,17 @@ class DebtViewModel(private val repository: DebtRepository) : ViewModel() {
 
     fun deleteTab(tab: TabEntity) {
         viewModelScope.launch {
-            repository.deleteTab(tab)
-            val currentTabs = tabs.value
-            val remainingTabs = currentTabs.filter { it.id != tab.id }
-            if (remainingTabs.isNotEmpty()) {
-                _selectedTab.value = remainingTabs.first()
-            } else {
-                _selectedTab.value = null
+            try {
+                repository.deleteTab(tab)
+                val currentTabs = tabs.value
+                val remainingTabs = currentTabs.filter { it.id != tab.id }
+                if (remainingTabs.isNotEmpty()) {
+                    _selectedTab.value = remainingTabs.first()
+                } else {
+                    _selectedTab.value = null
+                }
+            } catch (e: Exception) {
+                // Ignore or handle gracefully
             }
         }
     }
