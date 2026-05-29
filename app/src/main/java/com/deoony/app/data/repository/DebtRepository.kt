@@ -2,11 +2,16 @@ package com.deoony.app.data.repository
 
 import com.deoony.app.data.database.DebtDao
 import com.deoony.app.data.database.DebtEntity
+import com.deoony.app.data.database.DebtPaymentDao
+import com.deoony.app.data.database.DebtPaymentEntity
 import com.deoony.app.data.database.TabEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 
-class DebtRepository(private val debtDao: DebtDao) {
+class DebtRepository(
+    private val debtDao: DebtDao,
+    private val debtPaymentDao: DebtPaymentDao
+) {
 
     val allTabs: Flow<List<TabEntity>> = debtDao.getAllTabs()
     val allDebts: Flow<List<DebtEntity>> = debtDao.getAllDebts()
@@ -57,4 +62,17 @@ class DebtRepository(private val debtDao: DebtDao) {
     suspend fun deletePerson(person: com.deoony.app.data.database.PersonEntity) {
         debtDao.deletePerson(person)
     }
+
+    fun getPaymentsForDebt(debtId: Int): Flow<List<DebtPaymentEntity>> {
+        return debtPaymentDao.getPaymentsForDebt(debtId)
+    }
+
+    suspend fun insertPayment(payment: DebtPaymentEntity): Long {
+        return debtPaymentDao.insertPayment(payment)
+    }
+
+    suspend fun deletePayment(payment: DebtPaymentEntity) {
+        debtPaymentDao.deletePayment(payment)
+    }
 }
+

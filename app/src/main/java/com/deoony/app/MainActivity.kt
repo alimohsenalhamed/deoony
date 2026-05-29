@@ -33,7 +33,7 @@ class MainActivity : ComponentActivity() {
         
         // Setup simple Room construction logic manually
         val database = AppDatabase.getDatabase(applicationContext)
-        val repository = DebtRepository(database.debtDao())
+        val repository = DebtRepository(database.debtDao(), database.debtPaymentDao())
         val factory = DebtViewModelFactory(repository)
         viewModel = ViewModelProvider(this, factory)[DebtViewModel::class.java]
 

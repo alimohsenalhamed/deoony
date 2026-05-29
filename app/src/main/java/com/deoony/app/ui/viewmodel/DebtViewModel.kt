@@ -181,15 +181,28 @@ class DebtViewModel(private val repository: DebtRepository) : ViewModel() {
     ) {
         val currentTab = _selectedTab.value ?: return
         viewModelScope.launch {
+            val calculatedCurrency = when {
+                title.contains("(ر.س)") -> "SAR"
+                title.contains("(ر.ي)") -> "YER"
+                title.contains("($)") -> "USD"
+                else -> "YER"
+            }
+            val calculatedDueDateMillis = com.deoony.app.ui.util.DateUtils.parseStringToMillis(dueDate)
+
             val debt = DebtEntity(
                 tabId = currentTab.id,
                 title = title,
                 personName = personName,
-                amount = amount,
+                amountMinor = Math.round(amount * 100),
+                currencyCode = calculatedCurrency,
+                currencyScale = 2,
                 isLentByMe = isLentByMe,
                 dueDate = dueDate,
+                dueDateMillis = calculatedDueDateMillis,
                 reminderEnabled = reminderEnabled,
                 reminderDateTime = reminderDateTime,
+                isPaid = false,
+                status = "ACTIVE",
                 notes = notes
             )
             repository.insertDebt(debt)
@@ -208,14 +221,27 @@ class DebtViewModel(private val repository: DebtRepository) : ViewModel() {
         notes: String
     ) {
         viewModelScope.launch {
+            val calculatedCurrency = when {
+                title.contains("(ر.س)") -> "SAR"
+                title.contains("(ر.ي)") -> "YER"
+                title.contains("($)") -> "USD"
+                else -> debt.currencyCode
+            }
+            val calculatedDueDateMillis = com.deoony.app.ui.util.DateUtils.parseStringToMillis(dueDate)
+            val updatedStatus = if (debt.isPaid) "PAID" else "ACTIVE"
+
             val updated = debt.copy(
                 title = title,
                 personName = personName,
-                amount = amount,
+                amountMinor = Math.round(amount * 100),
+                currencyCode = calculatedCurrency,
+                currencyScale = 2,
                 isLentByMe = isLentByMe,
                 dueDate = dueDate,
+                dueDateMillis = calculatedDueDateMillis,
                 reminderEnabled = reminderEnabled,
                 reminderDateTime = reminderDateTime,
+                status = updatedStatus,
                 notes = notes
             )
             repository.updateDebt(updated)
@@ -224,7 +250,12 @@ class DebtViewModel(private val repository: DebtRepository) : ViewModel() {
 
     fun toggleDebtPaid(debt: DebtEntity) {
         viewModelScope.launch {
-            val updated = debt.copy(isPaid = !debt.isPaid)
+            val newIsPaid = !debt.isPaid
+            val updatedStatus = if (newIsPaid) "PAID" else "ACTIVE"
+            val updated = debt.copy(
+                isPaid = newIsPaid,
+                status = updatedStatus
+            )
             repository.updateDebt(updated)
         }
     }
@@ -342,12 +373,16 @@ class DebtViewModel(private val repository: DebtRepository) : ViewModel() {
             dObj.put("tabId", debt.tabId)
             dObj.put("title", debt.title)
             dObj.put("personName", debt.personName)
-            dObj.put("amount", debt.amount)
+            dObj.put("amountMinor", debt.amountMinor)
+            dObj.put("currencyCode", debt.currencyCode)
+            dObj.put("currencyScale", debt.currencyScale)
             dObj.put("isLentByMe", debt.isLentByMe)
             dObj.put("dueDate", debt.dueDate)
+            dObj.put("dueDateMillis", debt.dueDateMillis ?: -1L)
             dObj.put("reminderEnabled", debt.reminderEnabled)
             dObj.put("reminderDateTime", debt.reminderDateTime ?: -1L)
             dObj.put("isPaid", debt.isPaid)
+            dObj.put("status", debt.status)
             dObj.put("notes", debt.notes)
             dObj.put("createdAt", debt.createdAt)
             debtsArray.put(dObj)
@@ -394,18 +429,38 @@ class DebtViewModel(private val repository: DebtRepository) : ViewModel() {
                 for (i in 0 until debtsArray.length()) {
                     val dObj = debtsArray.getJSONObject(i)
                     val reminderTime = dObj.optLong("reminderDateTime", -1L)
+                    
+                    val isPaidVal = dObj.optBoolean("isPaid", false)
+                    val statusVal = dObj.optString("status", if (isPaidVal) "PAID" else "ACTIVE")
+                    
+                    val parsedAmountMinor = if (dObj.has("amountMinor")) {
+                        dObj.getLong("amountMinor")
+                    } else {
+                        Math.round(dObj.getDouble("amount") * 100)
+                    }
+                    val currCode = dObj.optString("currencyCode", "YER")
+                    val currScale = dObj.optInt("currencyScale", 2)
+                    
+                    val rawDueDate = dObj.optString("dueDate", "")
+                    val rawDueDateMillis = dObj.optLong("dueDateMillis", -1L)
+                    val parsedDueDateMillis = if (rawDueDateMillis != -1L) rawDueDateMillis else com.deoony.app.ui.util.DateUtils.parseStringToMillis(rawDueDate)
+
                     debtsToInsert.add(
                         DebtEntity(
                             id = dObj.optInt("id", 0),
                             tabId = dObj.getInt("tabId"),
                             title = dObj.getString("title"),
                             personName = dObj.getString("personName"),
-                            amount = dObj.getDouble("amount"),
+                            amountMinor = parsedAmountMinor,
+                            currencyCode = currCode,
+                            currencyScale = currScale,
                             isLentByMe = dObj.getBoolean("isLentByMe"),
-                            dueDate = dObj.optString("dueDate", ""),
+                            dueDate = rawDueDate,
+                            dueDateMillis = parsedDueDateMillis,
                             reminderEnabled = dObj.optBoolean("reminderEnabled", false),
                             reminderDateTime = if (reminderTime == -1L) null else reminderTime,
-                            isPaid = dObj.optBoolean("isPaid", false),
+                            isPaid = isPaidVal,
+                            status = statusVal,
                             notes = dObj.optString("notes", ""),
                             createdAt = dObj.optLong("createdAt", System.currentTimeMillis())
                         )
