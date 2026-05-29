@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Beautiful graphic icon for Debt tracking (a money/handshake/ledger outline) in modern soft blue/green -->
+    <path
+        android:fillColor="#58A6FF"
+        android:pathData="M54,24A30,30,0,1,0,84,54,30,30,0,0,0,54,24ZM54,78A24,24,0,1,1,78,54,24,24,0,0,1,54,78Z"/>
+    <path
+        android:fillColor="#388BFD"
+        android:pathData="M48,42h12v6H48z M48,54h12v12H48z" />
+</vector>
