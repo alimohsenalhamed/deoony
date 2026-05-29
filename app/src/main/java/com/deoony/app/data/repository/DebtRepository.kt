@@ -78,5 +78,12 @@ class DebtRepository(
     suspend fun deletePayment(payment: DebtPaymentEntity) {
         debtPaymentDao.deletePayment(payment)
     }
+
+    suspend fun clearAllData() {
+        debtPaymentDao.deleteAllPayments()
+        debtDao.deleteAllDebts()
+        debtDao.deleteAllPersons()
+        debtDao.deleteAllTabs()
+    }
 }
 

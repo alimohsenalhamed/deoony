@@ -42,6 +42,15 @@ interface DebtDao {
     @Query("DELETE FROM debts WHERE tabId = :tabId")
     suspend fun deleteDebtsByTab(tabId: Int)
 
+    @Query("DELETE FROM tabs")
+    suspend fun deleteAllTabs()
+
+    @Query("DELETE FROM debts")
+    suspend fun deleteAllDebts()
+
+    @Query("DELETE FROM persons")
+    suspend fun deleteAllPersons()
+
     // Person operations
     @Query("SELECT * FROM persons ORDER BY createdAt DESC")
     fun getAllPersons(): Flow<List<PersonEntity>>

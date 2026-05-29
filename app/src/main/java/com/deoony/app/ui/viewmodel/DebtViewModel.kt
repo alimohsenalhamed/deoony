@@ -579,7 +579,7 @@ class DebtViewModel(private val repository: DebtRepository) : ViewModel() {
                             syncRepo.mergeBackup(tabsToInsert, debtsToInsert, personsToInsert, paymentsToInsert)
                         } else {
                             // Pure Replace: Clean all tables and insert back in a single transaction
-                            db.clearAllTables()
+                            repository.clearAllData()
                             
                             // Insert new items
                             for (tab in tabsToInsert) {
