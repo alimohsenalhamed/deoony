@@ -29,7 +29,10 @@ class DebtRepository(
     }
 
     suspend fun deleteTab(tab: TabEntity) {
-        debtDao.deleteDebtsByTab(tab.id)
+        val debts = debtDao.getDebtsByTab(tab.id).first()
+        if (debts.isNotEmpty()) {
+            throw IllegalStateException("لا يمكن حذف هذا القسم لأنه يحتوي على ديون.")
+        }
         debtDao.deleteTab(tab)
     }
 

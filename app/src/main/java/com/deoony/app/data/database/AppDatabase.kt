@@ -94,9 +94,12 @@ abstract class AppDatabase : RoomDatabase() {
                         `id`, `tabId`, `title`, `personName`,
                         CAST(ROUND(`amount` * 100) AS INTEGER), 'YER', 2,
                         `isLentByMe`, `dueDate`,
-                        CASE WHEN strftime('%s', `dueDate`) IS NOT NULL 
-                             THEN CAST(strftime('%s', `dueDate`) AS INTEGER) * 1000 
-                             ELSE NULL 
+                        CASE 
+                             WHEN `dueDate` LIKE '____-__-__' THEN CAST(strftime('%s', `dueDate`) AS INTEGER) * 1000
+                             WHEN `dueDate` LIKE '____/__/__' THEN CAST(strftime('%s', replace(`dueDate`, '/', '-')) AS INTEGER) * 1000
+                             WHEN `dueDate` LIKE '__/__/____' THEN CAST(strftime('%s', substr(`dueDate`, 7, 4) || '-' || substr(`dueDate`, 4, 2) || '-' || substr(`dueDate`, 1, 2)) AS INTEGER) * 1000
+                             WHEN `dueDate` LIKE '__-__-____' THEN CAST(strftime('%s', substr(`dueDate`, 7, 4) || '-' || substr(`dueDate`, 4, 2) || '-' || substr(`dueDate`, 1, 2)) AS INTEGER) * 1000
+                             ELSE CASE WHEN strftime('%s', `dueDate`) IS NOT NULL THEN CAST(strftime('%s', `dueDate`) AS INTEGER) * 1000 ELSE NULL END
                         END,
                         `reminderEnabled`, `reminderDateTime`,
                         `isPaid`, CASE WHEN `isPaid` = 1 THEN 'PAID' ELSE 'ACTIVE' END, `notes`, `createdAt`
