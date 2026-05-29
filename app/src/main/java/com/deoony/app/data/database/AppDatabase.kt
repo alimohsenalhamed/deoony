@@ -93,7 +93,12 @@ abstract class AppDatabase : RoomDatabase() {
                     SELECT
                         `id`, `tabId`, `title`, `personName`,
                         CAST(ROUND(`amount` * 100) AS INTEGER), 'YER', 2,
-                        `isLentByMe`, `dueDate`, NULL, `reminderEnabled`, `reminderDateTime`,
+                        `isLentByMe`, `dueDate`,
+                        CASE WHEN strftime('%s', `dueDate`) IS NOT NULL 
+                             THEN CAST(strftime('%s', `dueDate`) AS INTEGER) * 1000 
+                             ELSE NULL 
+                        END,
+                        `reminderEnabled`, `reminderDateTime`,
                         `isPaid`, CASE WHEN `isPaid` = 1 THEN 'PAID' ELSE 'ACTIVE' END, `notes`, `createdAt`
                     FROM `debts`
                 """.trimIndent())

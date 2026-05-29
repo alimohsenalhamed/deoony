@@ -181,9 +181,14 @@ fun EditTabDialog(
 
                     Button(
                         onClick = {
-                            viewModel.deleteTab(tab)
-                            Toast.makeText(context, "تم حذف التبويب والديون المترتبة بداخلة بنجاح", Toast.LENGTH_SHORT).show()
-                            onDismissRequest()
+                            val hasDebts = viewModel.allDebts.value.any { it.tabId == tab.id }
+                            if (hasDebts) {
+                                Toast.makeText(context, "لا يمكن حذف هذا التبويب لأنه يحتوي على ديون. يرجى حذف الديون أولاً.", Toast.LENGTH_LONG).show()
+                            } else {
+                                viewModel.deleteTab(tab)
+                                Toast.makeText(context, "تم حذف التبويب بنجاح", Toast.LENGTH_SHORT).show()
+                                onDismissRequest()
+                            }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = BorrowedRose),
                         modifier = Modifier.weight(1f),
