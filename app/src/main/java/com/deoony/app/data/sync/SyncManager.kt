@@ -28,15 +28,9 @@ class SyncManager {
         _syncState.value = SyncState.SYNCING("جاري فحص اتصال المزامنة السحابية...", 0.1f)
         delay(1000)
         
-        if (!isFirebaseConfigured()) {
-            _syncState.value = SyncState.FIREBASE_NOT_CONFIGURED
-            return
-        }
-        
-        // This block will execute if Firebase is someday configured with google-services.json
-        _syncState.value = SyncState.SYNCING("جاري رفع البيانات إلى سحابة Firestore...", 0.5f)
-        delay(800)
-        _syncState.value = SyncState.SUCCESS("تمت مزامنة البيانات سحابياً بنجاح!")
+        // Since Firebase/Firestore is not configured with active configuration scripts,
+        // we directly yield FIREBASE_NOT_CONFIGURED status.
+        _syncState.value = SyncState.FIREBASE_NOT_CONFIGURED
     }
 
     fun setSyncState(state: SyncState) {

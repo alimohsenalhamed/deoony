@@ -13,6 +13,7 @@ import com.deoony.app.data.database.DebtEntity
 import com.deoony.app.data.database.TabEntity
 import com.deoony.app.data.repository.DebtRepository
 import com.deoony.app.data.sync.SyncState
+import androidx.room.withTransaction
 import com.deoony.app.data.sync.SyncManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -447,6 +448,23 @@ class DebtViewModel(private val repository: DebtRepository) : ViewModel() {
                 
                 val root = JSONObject(cleanText)
                 
+                // Validate metadata & backupVersion
+                val backupVersion: Int
+                if (root.has("metadata")) {
+                    val metadataObj = root.getJSONObject("metadata")
+                    backupVersion = metadataObj.optInt("backupVersion", -1)
+                } else if (root.has("version")) {
+                    backupVersion = root.getInt("version")
+                } else {
+                    onComplete(false, "صيغة الرمز الاحتياطي غير صالحة، لم يتم العثور على معلومات الإصدار (metadata).")
+                    return@launch
+                }
+
+                if (backupVersion != 1 && backupVersion != 2) {
+                    onComplete(false, "نسخة الرمز الاحتياطي غير مدعومة! نظام الاستعادة يدعم فقط الإصدارين 1 و 2.")
+                    return@launch
+                }
+                
                 // Validate JSON has correct arrays
                 if (!root.has("tabs") || !root.has("debts")) {
                     onComplete(false, "صيغة البيانات غير صحيحة، تأكد من إدخال النص السحابي الصحيح للنسخة الاحتياطية.")
@@ -553,29 +571,29 @@ class DebtViewModel(private val repository: DebtRepository) : ViewModel() {
 
                 // Execution of Import
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    if (isMerge) {
-                        // Use SyncRepository tool to merge intelligently
-                        val syncRepo = com.deoony.app.data.sync.SyncRepository(repository)
-                        syncRepo.mergeBackup(tabsToInsert, debtsToInsert, personsToInsert, paymentsToInsert)
-                    } else {
-                        // Pure Replace: Clean all tables in transaction and insert back
-                        val db = com.deoony.app.data.database.AppDatabase.getDatabase(context)
-                        db.runInTransaction {
+                    val db = com.deoony.app.data.database.AppDatabase.getDatabase(context)
+                    db.withTransaction {
+                        if (isMerge) {
+                            // Use SyncRepository tool to merge intelligently
+                            val syncRepo = com.deoony.app.data.sync.SyncRepository(repository)
+                            syncRepo.mergeBackup(tabsToInsert, debtsToInsert, personsToInsert, paymentsToInsert)
+                        } else {
+                            // Pure Replace: Clean all tables and insert back in a single transaction
                             db.clearAllTables()
-                        }
-                        
-                        // Insert new items
-                        for (tab in tabsToInsert) {
-                            repository.insertTab(tab)
-                        }
-                        for (person in personsToInsert) {
-                            repository.insertPerson(person)
-                        }
-                        for (debt in debtsToInsert) {
-                            repository.insertDebt(debt)
-                        }
-                        for (payment in paymentsToInsert) {
-                            repository.insertPayment(payment)
+                            
+                            // Insert new items
+                            for (tab in tabsToInsert) {
+                                repository.insertTab(tab)
+                            }
+                            for (person in personsToInsert) {
+                                repository.insertPerson(person)
+                            }
+                            for (debt in debtsToInsert) {
+                                repository.insertDebt(debt)
+                            }
+                            for (payment in paymentsToInsert) {
+                                repository.insertPayment(payment)
+                            }
                         }
                     }
                 }
