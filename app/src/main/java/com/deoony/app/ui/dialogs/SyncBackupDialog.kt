@@ -15,6 +15,8 @@ import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,7 +34,7 @@ import androidx.compose.ui.window.Dialog
 import com.deoony.app.BuildConfig
 import com.deoony.app.ui.theme.LentEmerald
 import com.deoony.app.ui.viewmodel.DebtViewModel
-import com.deoony.app.ui.viewmodel.SyncState
+import com.deoony.app.data.sync.SyncState
 import kotlinx.coroutines.launch
 
 @Composable
@@ -43,6 +45,8 @@ fun SyncBackupDialog(
 ) {
     var backupPasteText by remember { mutableStateOf("") }
     var isManualImportMode by remember { mutableStateOf(false) }
+    var isMergeMode by remember { mutableStateOf(true) } // Mode selector (Merge vs Replace)
+    
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
 
@@ -83,27 +87,27 @@ fun SyncBackupDialog(
                         }
                         Spacer(modifier = Modifier.height(10.dp))
                         Text(
-                            text = "المزامنة السحابية بحساب Google",
+                            text = "المزامنة السحابية والاحتياطية",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            text = "استرداد و ربط بياناتك عبر أجهزة متعددة",
+                            text = "استيراد وتصدير بياناتك بأمان وسهولة",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         )
                     }
                 }
 
-                // Progress or result state rendering
+                // RENDERING STATE: SYNCING
                 item {
                     AnimatedVisibility(
-                        visible = syncState is SyncState.Syncing,
+                        visible = syncState is SyncState.SYNCING,
                         enter = fadeIn(),
                         exit = fadeOut()
                     ) {
-                        val state = syncState as? SyncState.Syncing
+                        val state = syncState as? SyncState.SYNCING
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -118,7 +122,7 @@ fun SyncBackupDialog(
                             )
                             Spacer(modifier = Modifier.height(10.dp))
                             Text(
-                                text = state?.currentStepString ?: "جاري العمل...",
+                                text = state?.message ?: "جاري العمل...",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.primary,
                                 textAlign = TextAlign.Center
@@ -127,13 +131,14 @@ fun SyncBackupDialog(
                     }
                 }
 
+                // RENDERING STATE: SUCCESS
                 item {
                     AnimatedVisibility(
-                        visible = syncState is SyncState.Success,
+                        visible = syncState is SyncState.SUCCESS,
                         enter = fadeIn(),
                         exit = fadeOut()
                     ) {
-                        val state = syncState as? SyncState.Success
+                        val state = syncState as? SyncState.SUCCESS
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -150,131 +155,203 @@ fun SyncBackupDialog(
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = state?.message ?: "اكتملت المزامنة وحفظ النسخة!",
+                                text = state?.message ?: "اكتملت المزامنة بنجاح!",
                                 style = MaterialTheme.typography.bodySmall,
                                 fontWeight = FontWeight.SemiBold,
                                 color = LentEmerald,
                                 textAlign = TextAlign.Center
                             )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Text(
-                                text = "الرمز البرمجي للنسخة السحابية:",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.05f))
-                                    .padding(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
+                            if (!state?.backupCode.isNullOrEmpty()) {
+                                Spacer(modifier = Modifier.height(10.dp))
                                 Text(
-                                    text = state?.backupCode?.take(36) + "...",
+                                    text = "الرمز البرمجي للنسخة:",
                                     style = MaterialTheme.typography.labelSmall,
-                                    modifier = Modifier.weight(1f),
-                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                IconButton(
-                                    onClick = {
-                                        state?.backupCode?.let { code ->
-                                            clipboardManager.setText(AnnotatedString(code))
-                                            Toast.makeText(context, "تم نسخ الرمز الاحتياطي بأمان للذاكرة!", Toast.LENGTH_SHORT).show()
-                                        }
-                                    },
-                                    modifier = Modifier.size(24.dp)
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.05f))
+                                        .padding(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.ContentCopy,
-                                        contentDescription = "نسخ الرمز الاحتياطي",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(16.dp)
+                                    Text(
+                                        text = state!!.backupCode.take(36) + "...",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        modifier = Modifier.weight(1f),
+                                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    IconButton(
+                                        onClick = {
+                                            clipboardManager.setText(AnnotatedString(state.backupCode))
+                                            Toast.makeText(context, "تم نسخ الرمز الاحتياطي بأمان للذاكرة!", Toast.LENGTH_SHORT).show()
+                                        },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.ContentCopy,
+                                            contentDescription = "نسخ الرمز الاحتياطي",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
 
-                // Main Info / Core Sync Button
+                // RENDERING STATE: FIREBASE_NOT_CONFIGURED
                 item {
-                    if (syncState is SyncState.Idle) {
-                        Text(
-                            text = if (BuildConfig.GOOGLE_CLIENT_ID.isEmpty()) {
-                                "يجب إضافة GOOGLE_CLIENT_ID في إعدادات الأسرار (Secrets) لتعمل المزامنة المباشرة. اضغط للمحاولة."
-                            } else {
-                                "المزامنة الفعلية السحابية عبر حساب Google جاهزة للعمل. انقر أدناه للاتصال."
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
-
-                item {
-                    if (syncState is SyncState.Idle) {
-                        val coroutineScope = rememberCoroutineScope()
-                        Button(
-                            onClick = { 
-                                coroutineScope.launch {
-                                    try {
-                                        viewModel.updateSyncState(SyncState.Syncing("جاري طلب تسجيل الدخول عبر جوجل...", 0.1f))
-                                        val credentialManager = androidx.credentials.CredentialManager.create(context)
-                                        val getGoogleIdOption = com.google.android.libraries.identity.googleid.GetGoogleIdOption.Builder()
-                                            .setFilterByAuthorizedAccounts(false)
-                                            .setServerClientId(if (BuildConfig.GOOGLE_CLIENT_ID.isNotEmpty()) BuildConfig.GOOGLE_CLIENT_ID else "100000000000-dummy.apps.googleusercontent.com")
-                                            .setAutoSelectEnabled(true)
-                                            .build()
-                                        
-                                        val request = androidx.credentials.GetCredentialRequest.Builder()
-                                            .addCredentialOption(getGoogleIdOption)
-                                            .build()
-                                            
-                                        val result = credentialManager.getCredential(
-                                            request = request,
-                                            context = context
-                                        )
-                                        val credential = result.credential
-                                        if (credential is androidx.credentials.CustomCredential && credential.type == com.google.android.libraries.identity.googleid.GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
-                                            val googleIdTokenCredential = com.google.android.libraries.identity.googleid.GoogleIdTokenCredential.createFrom(credential.data)
-                                            viewModel.updateSyncState(SyncState.Syncing("تم تسجيل الدخول: ${googleIdTokenCredential.id}", 0.5f))
-                                            viewModel.triggerCloudSync()
-                                        } else {
-                                            Toast.makeText(context, "لم يتم التعرف على الحساب", Toast.LENGTH_SHORT).show()
-                                            viewModel.dismissSyncState()
-                                        }
-                                    } catch (e: Exception) {
-                                        if (BuildConfig.GOOGLE_CLIENT_ID.isEmpty()) {
-                                            Toast.makeText(context, "الرجاء إضافة GOOGLE_CLIENT_ID في نافذة Secrets في قائمة الإعدادات الجانبية", Toast.LENGTH_LONG).show()
-                                        } else {
-                                            Toast.makeText(context, "عذرا، فشل تسجيل الدخول: ${e.message}", Toast.LENGTH_SHORT).show()
-                                        }
-                                        viewModel.dismissSyncState()
-                                    }
-                                }
-                            },
+                    AnimatedVisibility(
+                        visible = syncState is SyncState.FIREBASE_NOT_CONFIGURED,
+                        enter = fadeIn(),
+                        exit = fadeOut()
+                    ) {
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .testTag("start_sync_button"),
-                            shape = RoundedCornerShape(14.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(MaterialTheme.colorScheme.error.copy(alpha = 0.1f))
+                                .padding(14.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Icon(imageVector = Icons.Default.AccountCircle, contentDescription = "مزامنة حساب")
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("الارتباط بحساب Google (محاكاة)")
+                            Icon(
+                                imageVector = Icons.Default.Error,
+                                contentDescription = "فشل",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(28.dp)
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "المزامنة السحابية غير مفعّلة بعد لعدم توفر ملف الإعدادات (google-services.json). يمكنك استخدام إمكانية النسخ الاحتياطي المحلي بالأسفل بالكامل.",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.error,
+                                textAlign = TextAlign.Center
+                            )
                         }
                     }
                 }
 
-                // Toggle import recovery view
+                // RENDERING STATE: OFFLINE
                 item {
-                    if (syncState is SyncState.Idle) {
+                    AnimatedVisibility(
+                        visible = syncState is SyncState.OFFLINE,
+                        enter = fadeIn(),
+                        exit = fadeOut()
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                                .padding(14.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CloudOff,
+                                contentDescription = "منقطع عن الشبكة",
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                modifier = Modifier.size(28.dp)
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "أنت غير متصل بالإنترنت حالياً، جاري حفظ كافة العمليات والتغييرات محلياً بأمان.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+
+                // RENDERING STATE: FAILED
+                item {
+                    AnimatedVisibility(
+                        visible = syncState is SyncState.FAILED,
+                        enter = fadeIn(),
+                        exit = fadeOut()
+                    ) {
+                        val state = syncState as? SyncState.FAILED
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(MaterialTheme.colorScheme.error.copy(alpha = 0.1f))
+                                .padding(14.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Error,
+                                contentDescription = "فشل",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(28.dp)
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = state?.message ?: "عذراً، فشلت العملية.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+
+                // MAIN INTERACTION BUTTONS (when IDLE or finished/restored)
+                item {
+                    if (syncState is SyncState.IDLE || syncState is SyncState.FIREBASE_NOT_CONFIGURED || syncState is SyncState.SUCCESS || syncState is SyncState.FAILED) {
+                        val coroutineScope = rememberCoroutineScope()
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Button(
+                                onClick = {
+                                    viewModel.triggerCloudSync()
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("start_sync_button"),
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                Icon(imageVector = Icons.Default.AccountCircle, contentDescription = "مزامنة سحابية")
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("بدء محاولة المزامنة السحابية")
+                            }
+
+                            Button(
+                                onClick = {
+                                    try {
+                                        val localBackup = viewModel.getLocalBackupJson()
+                                        clipboardManager.setText(AnnotatedString(localBackup))
+                                        Toast.makeText(context, "تم توليد ونسخ كود الاحتياطي المحلي عالي الأمان بنجاح للحافظة!", Toast.LENGTH_LONG).show()
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "فشل إنشاء كود الاحتياطي المحلي: ${e.message}", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(14.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = LentEmerald)
+                            ) {
+                                Icon(imageVector = Icons.Default.ContentCopy, contentDescription = "تصدير محلي")
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("توليد ونسخ كود الاحتياطي المحلي")
+                            }
+                        }
+                    }
+                }
+
+                // TOGGLE IMPORT / RESTORE SECTION
+                item {
+                    if (syncState is SyncState.IDLE || syncState is SyncState.FIREBASE_NOT_CONFIGURED || syncState is SyncState.SUCCESS || syncState is SyncState.FAILED) {
                         Column {
                             Spacer(modifier = Modifier.height(10.dp))
                             Row(
@@ -313,10 +390,46 @@ fun SyncBackupDialog(
                                         .testTag("backup_import_input"),
                                     shape = RoundedCornerShape(12.dp)
                                 )
+                                
                                 Spacer(modifier = Modifier.height(10.dp))
+                                
+                                // Selection of mode: Merge or Replace
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceEvenly,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.clickable { isMergeMode = true }
+                                    ) {
+                                        RadioButton(
+                                            selected = isMergeMode,
+                                            onClick = { isMergeMode = true }
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("دمج ذكي (Merge)", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                                    }
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.clickable { isMergeMode = false }
+                                    ) {
+                                        RadioButton(
+                                            selected = !isMergeMode,
+                                            onClick = { isMergeMode = false }
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("استبدال كلي (Replace)", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.error)
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+                                
                                 Button(
                                     onClick = {
-                                        viewModel.restoreFromBackupText(backupPasteText) { success, msg ->
+                                        viewModel.restoreFromBackupText(context, backupPasteText, isMergeMode) { success, msg ->
                                             if (success) {
                                                 Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                                                 onDismissRequest()
@@ -325,11 +438,11 @@ fun SyncBackupDialog(
                                             }
                                         }
                                     },
-                                    colors = ButtonDefaults.buttonColors(containerColor = LentEmerald),
+                                    colors = ButtonDefaults.buttonColors(containerColor = if (isMergeMode) LentEmerald else MaterialTheme.colorScheme.error),
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
-                                    Text("تأكيد دمج واسترجاع النسخة الاحتياطية")
+                                    Text(if (isMergeMode) "تأكيد دمج واسترجاع النسخة" else "تأكيد مسح البيانات واستبدال النسخة")
                                 }
                             }
                         }
@@ -347,7 +460,7 @@ fun SyncBackupDialog(
                                 onDismissRequest()
                             }
                         ) {
-                            Text("إغلاق وإتمام")
+                            Text("إغلاق")
                         }
                     }
                 }

@@ -53,6 +53,7 @@ class DebtRepository(
     }
 
     val allPersons = debtDao.getAllPersons()
+    val allPayments: Flow<List<DebtPaymentEntity>> = debtPaymentDao.getAllPayments()
 
     suspend fun insertPerson(person: com.deoony.app.data.database.PersonEntity): Long {
         return debtDao.insertPerson(person)

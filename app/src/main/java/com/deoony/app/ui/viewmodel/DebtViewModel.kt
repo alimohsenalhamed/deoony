@@ -12,6 +12,8 @@ import com.deoony.app.MainActivity
 import com.deoony.app.data.database.DebtEntity
 import com.deoony.app.data.database.TabEntity
 import com.deoony.app.data.repository.DebtRepository
+import com.deoony.app.data.sync.SyncState
+import com.deoony.app.data.sync.SyncManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -26,13 +28,6 @@ import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-
-sealed class SyncState {
-    object Idle : SyncState()
-    data class Syncing(val currentStepString: String, val progress: Float) : SyncState()
-    data class Success(val message: String, val backupCode: String,val timestamp: Long) : SyncState()
-    data class Error(val errorMessage: String) : SyncState()
-}
 
 enum class ThemePreference {
     SYSTEM, LIGHT, DARK
@@ -77,12 +72,19 @@ class DebtViewModel(private val repository: DebtRepository) : ViewModel() {
             initialValue = emptyList()
         )
 
+    val allPayments: StateFlow<List<com.deoony.app.data.database.DebtPaymentEntity>> = repository.allPayments
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
     // Sync
-    private val _syncState = MutableStateFlow<SyncState>(SyncState.Idle)
-    val syncState: StateFlow<SyncState> = _syncState.asStateFlow()
+    val syncManager = SyncManager()
+    val syncState: StateFlow<SyncState> = syncManager.syncState
 
     fun updateSyncState(state: SyncState) {
-        _syncState.value = state
+        syncManager.setSyncState(state)
     }
 
     // Active alert/reminders triggered list (simulated)
@@ -320,56 +322,60 @@ class DebtViewModel(private val repository: DebtRepository) : ViewModel() {
     // BACKUP & CLOUD SYNC UTILITIES
     fun triggerCloudSync() {
         viewModelScope.launch {
-            try {
-                _syncState.value = SyncState.Syncing("جاري الاتصال بالسحابة الآمنة المشفرة...", 0.1f)
-                delay(1200)
-                
-                _syncState.value = SyncState.Syncing("جاري تحليل ومزامنة البيانات المحلية...", 0.35f)
-                val allTabsList = tabs.value
-                val allDebtsList = allDebts.value
-                delay(1000)
-                
-                _syncState.value = SyncState.Syncing("تشفير البيانات بتقنية AES-256 لحفظها بأمان تام...", 0.65f)
-                val backupJson = generateBackupJson(allTabsList, allDebtsList)
-                delay(1200)
-                
-                _syncState.value = SyncState.Syncing("جاري رفع النسخة الاحتياطية السحابية والتأكيد...", 0.85f)
-                delay(1000)
-                
-                val sdf = SimpleDateFormat("dd MMMM yyyy - hh:mm a", Locale("ar"))
-                val timeString = sdf.format(Date())
-                _syncState.value = SyncState.Success(
-                    message = "تمت المزامنة وحفظ النسخة السحابية بنجاح في $timeString. تم الحفاظ على كافة البيانات بأمان تام.",
-                    backupCode = backupJson,
-                    timestamp = System.currentTimeMillis()
-                )
-            } catch (e: Exception) {
-                _syncState.value = SyncState.Error("فشلت المزامنة: ${e.localizedMessage ?: "حدث خطأ غير متوقع"}")
-            }
+            syncManager.performSync(
+                tabs = tabs.value,
+                debts = allDebts.value,
+                persons = persons.value,
+                payments = allPayments.value
+            )
         }
     }
 
     fun dismissSyncState() {
-        _syncState.value = SyncState.Idle
+        syncManager.resetState()
     }
 
-    // Convert all tabs and debts to a secure native JSON Backup format
-    private fun generateBackupJson(tabsList: List<TabEntity>, debtsList: List<DebtEntity>): String {
+    // Convert all tabs, persons, debts, and processes to complete backup JSON format
+    fun getLocalBackupJson(): String {
+        return generateBackupJson(
+            tabsList = tabs.value,
+            debtsList = allDebts.value,
+            personsList = persons.value,
+            paymentsList = allPayments.value
+        )
+    }
+
+    private fun generateBackupJson(
+        tabsList: List<TabEntity>,
+        debtsList: List<DebtEntity>,
+        personsList: List<com.deoony.app.data.database.PersonEntity>,
+        paymentsList: List<com.deoony.app.data.database.DebtPaymentEntity>
+    ): String {
         val root = JSONObject()
-        root.put("version", 1)
-        root.put("generator", "Deyoni_Secure_Backend")
         
+        // Metadata
+        val metadata = JSONObject()
+        metadata.put("backupVersion", 2)
+        metadata.put("appVersion", "1.0")
+        metadata.put("databaseVersion", 4)
+        metadata.put("exportedAtMillis", System.currentTimeMillis())
+        metadata.put("generator", "Deyoni_Secure_Backend_v2")
+        root.put("metadata", metadata)
+
+        // Part 1: Tabs
         val tabsArray = JSONArray()
         for (tab in tabsList) {
             val tObj = JSONObject()
             tObj.put("id", tab.id)
             tObj.put("name", tab.name)
             tObj.put("colorHex", tab.colorHex)
+            tObj.put("iconName", tab.iconName)
             tObj.put("createdAt", tab.createdAt)
             tabsArray.put(tObj)
         }
         root.put("tabs", tabsArray)
         
+        // Part 2: Debts
         val debtsArray = JSONArray()
         for (debt in debtsList) {
             val dObj = JSONObject()
@@ -392,12 +398,45 @@ class DebtViewModel(private val repository: DebtRepository) : ViewModel() {
             debtsArray.put(dObj)
         }
         root.put("debts", debtsArray)
+
+        // Part 3: Persons
+        val personsArray = JSONArray()
+        for (person in personsList) {
+            val pObj = JSONObject()
+            pObj.put("id", person.id)
+            pObj.put("name", person.name)
+            pObj.put("defaultType", person.defaultType)
+            pObj.put("iconName", person.iconName)
+            pObj.put("createdAt", person.createdAt)
+            personsArray.put(pObj)
+        }
+        root.put("persons", personsArray)
+
+        // Part 4: Payments
+        val paymentsArray = JSONArray()
+        for (payment in paymentsList) {
+            val payObj = JSONObject()
+            payObj.put("id", payment.id)
+            payObj.put("debtId", payment.debtId)
+            payObj.put("amountMinor", payment.amountMinor)
+            payObj.put("currencyCode", payment.currencyCode)
+            payObj.put("paidAtMillis", payment.paidAtMillis)
+            payObj.put("note", payment.note)
+            payObj.put("createdAtMillis", payment.createdAtMillis)
+            paymentsArray.put(payObj)
+        }
+        root.put("payments", paymentsArray)
         
-        return root.toString(4) // Beautifully formatted indent JSON
+        return root.toString(4)
     }
 
-    // Restore Database from a backup string safely
-    fun restoreFromBackupText(backupText: String, onComplete: (Boolean, String) -> Unit) {
+    // Restore Database from a backup string safely (supporting either Replace or Merge mode)
+    fun restoreFromBackupText(
+        context: Context,
+        backupText: String,
+        isMerge: Boolean,
+        onComplete: (Boolean, String) -> Unit
+    ) {
         viewModelScope.launch {
             try {
                 val cleanText = backupText.trim()
@@ -407,6 +446,8 @@ class DebtViewModel(private val repository: DebtRepository) : ViewModel() {
                 }
                 
                 val root = JSONObject(cleanText)
+                
+                // Validate JSON has correct arrays
                 if (!root.has("tabs") || !root.has("debts")) {
                     onComplete(false, "صيغة البيانات غير صحيحة، تأكد من إدخال النص السحابي الصحيح للنسخة الاحتياطية.")
                     return@launch
@@ -422,6 +463,7 @@ class DebtViewModel(private val repository: DebtRepository) : ViewModel() {
                             id = tObj.optInt("id", 0),
                             name = tObj.getString("name"),
                             colorHex = tObj.optString("colorHex", "#4A707A"),
+                            iconName = tObj.optString("iconName", "Folder"),
                             createdAt = tObj.optLong("createdAt", System.currentTimeMillis())
                         )
                     )
@@ -471,24 +513,84 @@ class DebtViewModel(private val repository: DebtRepository) : ViewModel() {
                     )
                 }
 
-                // Delete old and enter restored
-                // To keep database simple, let's insert them
-                // We recreate tables
-                for (tab in tabsToInsert) {
-                    repository.insertTab(tab)
-                }
-                for (debt in debtsToInsert) {
-                    repository.insertDebt(debt)
+                // 3. Parse Persons (optional for older backups)
+                val personsToInsert = mutableListOf<com.deoony.app.data.database.PersonEntity>()
+                if (root.has("persons")) {
+                    val personsArray = root.getJSONArray("persons")
+                    for (i in 0 until personsArray.length()) {
+                        val pObj = personsArray.getJSONObject(i)
+                        personsToInsert.add(
+                            com.deoony.app.data.database.PersonEntity(
+                                id = pObj.optInt("id", 0),
+                                name = pObj.getString("name"),
+                                defaultType = pObj.optString("defaultType", "غير محدد"),
+                                iconName = pObj.optString("iconName", "person"),
+                                createdAt = pObj.optLong("createdAt", System.currentTimeMillis())
+                            )
+                        )
+                    }
                 }
 
-                // Refresh state
-                val allTabsList = tabs.value
+                // 4. Parse Payments (optional for older backups)
+                val paymentsToInsert = mutableListOf<com.deoony.app.data.database.DebtPaymentEntity>()
+                if (root.has("payments")) {
+                    val paymentsArray = root.getJSONArray("payments")
+                    for (i in 0 until paymentsArray.length()) {
+                        val pObj = paymentsArray.getJSONObject(i)
+                        paymentsToInsert.add(
+                            com.deoony.app.data.database.DebtPaymentEntity(
+                                id = pObj.optInt("id", 0),
+                                debtId = pObj.getInt("debtId"),
+                                amountMinor = pObj.getLong("amountMinor"),
+                                currencyCode = pObj.optString("currencyCode", "YER"),
+                                paidAtMillis = pObj.getLong("paidAtMillis"),
+                                note = pObj.optString("note", ""),
+                                createdAtMillis = pObj.optLong("createdAtMillis", System.currentTimeMillis())
+                            )
+                        )
+                    }
+                }
+
+                // Execution of Import
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    if (isMerge) {
+                        // Use SyncRepository tool to merge intelligently
+                        val syncRepo = com.deoony.app.data.sync.SyncRepository(repository)
+                        syncRepo.mergeBackup(tabsToInsert, debtsToInsert, personsToInsert, paymentsToInsert)
+                    } else {
+                        // Pure Replace: Clean all tables in transaction and insert back
+                        val db = com.deoony.app.data.database.AppDatabase.getDatabase(context)
+                        db.runInTransaction {
+                            db.clearAllTables()
+                        }
+                        
+                        // Insert new items
+                        for (tab in tabsToInsert) {
+                            repository.insertTab(tab)
+                        }
+                        for (person in personsToInsert) {
+                            repository.insertPerson(person)
+                        }
+                        for (debt in debtsToInsert) {
+                            repository.insertDebt(debt)
+                        }
+                        for (payment in paymentsToInsert) {
+                            repository.insertPayment(payment)
+                        }
+                    }
+                }
+
+                // Refresh state after successful import
+                val allTabsList = repository.allTabs.first()
                 if (allTabsList.isNotEmpty()) {
                     _selectedTab.value = allTabsList.first()
+                } else {
+                    _selectedTab.value = null
                 }
                 updateDebtsCollection()
 
-                onComplete(true, "تم استرجاع النسخة الاحتياطية بنجاح! تم استيراد ${tabsToInsert.size} تبويبات و ${debtsToInsert.size} عمليات دين سارية.")
+                val successMsg = if (isMerge) "تم دمج النسخة الاحتياطية بنجاح!" else "تم استبدال البيانات السابقة واستعادة النسخة بالكامل بنجاح!"
+                onComplete(true, successMsg)
             } catch (e: Exception) {
                 onComplete(false, "فشل استرداد البيانات: تأكد من نسخ النص بدقة. تفاصيل الخطأ: ${e.localizedMessage}")
             }
