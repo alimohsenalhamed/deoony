@@ -30,6 +30,9 @@ interface DebtDao {
     @Query("SELECT * FROM debts ORDER BY createdAt DESC")
     fun getAllDebts(): Flow<List<DebtEntity>>
 
+    @Query("SELECT * FROM debts WHERE id = :id LIMIT 1")
+    suspend fun getDebtById(id: Int): DebtEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertDebt(debt: DebtEntity): Long
 

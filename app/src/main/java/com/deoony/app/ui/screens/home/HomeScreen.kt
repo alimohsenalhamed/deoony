@@ -40,6 +40,10 @@ import com.deoony.app.ui.theme.*
 import com.deoony.app.ui.util.safeParseColor
 import com.deoony.app.ui.viewmodel.DebtViewModel
 import com.deoony.app.ui.viewmodel.ThemePreference
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.Manifest
+import android.os.Build
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -49,6 +53,19 @@ fun HomeScreen(
     showWelcomeInitially: Boolean = false
 ) {
     val context = LocalContext.current
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        val launcher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission()
+        ) { isGranted ->
+            if (!isGranted) {
+                Toast.makeText(context, "لن تظهر التذكيرات حتى تسمح بالإشعارات.", Toast.LENGTH_LONG).show()
+            }
+        }
+        LaunchedEffect(Unit) {
+            launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     // Observe State
     val tabs by viewModel.tabs.collectAsStateWithLifecycle()

@@ -3,6 +3,7 @@ package com.deoony.app.ui.viewmodel
 import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
+import android.widget.Toast
 import android.content.Intent
 import android.os.Build
 import androidx.lifecycle.ViewModel
@@ -158,7 +159,7 @@ class DebtViewModel(private val repository: DebtRepository) : ViewModel() {
         }
     }
 
-    fun deleteTab(tab: TabEntity) {
+    fun deleteTab(context: Context, tab: TabEntity) {
         viewModelScope.launch {
             try {
                 repository.deleteTab(tab)
@@ -170,13 +171,14 @@ class DebtViewModel(private val repository: DebtRepository) : ViewModel() {
                     _selectedTab.value = null
                 }
             } catch (e: Exception) {
-                // Ignore or handle gracefully
+                Toast.makeText(context, e.message ?: "لا يمكن حذف هذا القسم لأنه يحتوي على ديون.", Toast.LENGTH_LONG).show()
             }
         }
     }
 
     // DEBT CRUD
     fun addDebt(
+        context: Context,
         title: String,
         personName: String,
         amount: Double,
@@ -212,11 +214,16 @@ class DebtViewModel(private val repository: DebtRepository) : ViewModel() {
                 status = "ACTIVE",
                 notes = notes
             )
-            repository.insertDebt(debt)
+            val insertedId = repository.insertDebt(debt).toInt()
+
+            if (reminderEnabled && reminderDateTime != null) {
+                com.deoony.app.data.reminder.DebtReminderScheduler.scheduleReminder(context, insertedId, reminderDateTime)
+            }
         }
     }
 
     fun editDebt(
+        context: Context,
         debt: DebtEntity,
         title: String,
         personName: String,
@@ -252,10 +259,16 @@ class DebtViewModel(private val repository: DebtRepository) : ViewModel() {
                 notes = notes
             )
             repository.updateDebt(updated)
+
+            if (updated.isPaid || !reminderEnabled || reminderDateTime == null) {
+                com.deoony.app.data.reminder.DebtReminderScheduler.cancelReminder(context, debt.id)
+            } else {
+                com.deoony.app.data.reminder.DebtReminderScheduler.scheduleReminder(context, debt.id, reminderDateTime)
+            }
         }
     }
 
-    fun toggleDebtPaid(debt: DebtEntity) {
+    fun toggleDebtPaid(context: Context, debt: DebtEntity) {
         viewModelScope.launch {
             val newIsPaid = !debt.isPaid
             val updatedStatus = if (newIsPaid) "PAID" else "ACTIVE"
@@ -264,12 +277,19 @@ class DebtViewModel(private val repository: DebtRepository) : ViewModel() {
                 status = updatedStatus
             )
             repository.updateDebt(updated)
+
+            if (newIsPaid) {
+                com.deoony.app.data.reminder.DebtReminderScheduler.cancelReminder(context, debt.id)
+            } else if (debt.reminderEnabled && debt.reminderDateTime != null) {
+                com.deoony.app.data.reminder.DebtReminderScheduler.scheduleReminder(context, debt.id, debt.reminderDateTime)
+            }
         }
     }
 
-    fun deleteDebt(debt: DebtEntity) {
+    fun deleteDebt(context: Context, debt: DebtEntity) {
         viewModelScope.launch {
             repository.deleteDebt(debt)
+            com.deoony.app.data.reminder.DebtReminderScheduler.cancelReminder(context, debt.id)
         }
     }
 

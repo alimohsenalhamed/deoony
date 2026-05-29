@@ -365,7 +365,7 @@ fun AddDebtDialog(
 
                                     val titleWithCurrency = "${debtTitle.trim()} ($selectedCurrency)"
 
-                                    viewModel.addDebt(
+                                    viewModel.addDebt(context = context,
                                         title = titleWithCurrency,
                                         personName = partnerName.trim(),
                                         amount = amountDouble,
@@ -619,7 +619,15 @@ fun EditDebtDialog(
                         }
                         Checkbox(
                             checked = hasReminder,
-                            onCheckedChange = { hasReminder = it },
+                            onCheckedChange = { checked ->
+                                val hasNoValidDueDate = (selectedDaysPreset == "مفتوح") || 
+                                                        (selectedDaysPreset == "بدون تغيير" && debt.dueDate.isEmpty())
+                                if (checked && hasNoValidDueDate) {
+                                    Toast.makeText(context, "حدد تاريخ الاستحقاق أولاً لتفعيل التذكير.", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    hasReminder = checked
+                                }
+                            },
                             colors = CheckboxDefaults.colors(checkedColor = PendingAmber)
                         )
                     }
@@ -664,7 +672,7 @@ fun EditDebtDialog(
                                         finalReminderTime = cal.timeInMillis
                                     }
 
-                                    viewModel.editDebt(
+                                    viewModel.editDebt(context = context,
                                         debt = debt,
                                         title = debtTitle.trim(),
                                         personName = partnerName.trim(),

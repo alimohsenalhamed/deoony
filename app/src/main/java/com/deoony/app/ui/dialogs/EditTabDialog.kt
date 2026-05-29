@@ -185,7 +185,7 @@ fun EditTabDialog(
                             if (hasDebts) {
                                 Toast.makeText(context, "لا يمكن حذف هذا التبويب لأنه يحتوي على ديون. يرجى حذف الديون أولاً.", Toast.LENGTH_LONG).show()
                             } else {
-                                viewModel.deleteTab(tab)
+                                viewModel.deleteTab(context, tab)
                                 Toast.makeText(context, "تم حذف التبويب بنجاح", Toast.LENGTH_SHORT).show()
                                 onDismissRequest()
                             }

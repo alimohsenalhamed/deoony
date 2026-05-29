@@ -70,7 +70,7 @@ fun DebtItem(
             // Settle completion checkbox on the right index
             Checkbox(
                 checked = isPaid,
-                onCheckedChange = { viewModel.toggleDebtPaid(debt) },
+                onCheckedChange = { viewModel.toggleDebtPaid(context, debt) },
                 colors = CheckboxDefaults.colors(
                     checkedColor = LentEmerald,
                     uncheckedColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
@@ -155,29 +155,27 @@ fun DebtItem(
                             }
                         }
 
-                        if (debt.reminderEnabled) {
+                        if (debt.reminderEnabled && debt.reminderDateTime != null) {
+                            val formattedReminder = try {
+                                SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.US).format(Date(debt.reminderDateTime))
+                            } catch (e: Exception) {
+                                ""
+                            }
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.clickable {
-                                    // Instantly trigger simulated alarm notification
-                                    viewModel.simulateNotificationTrigger(
-                                        debt.title,
-                                        debt.personName,
-                                        debt.isLentByMe,
-                                        debt.amount
-                                    )
-                                    Toast.makeText(context, "تمت محاكاة تنبيه السداد لتجربته الآن!", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "تنبيه الاستحقاق مجدول تلقائياً في: $formattedReminder", Toast.LENGTH_LONG).show()
                                 }
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Alarm,
-                                    contentDescription = "التنبيه الآمن مفعل",
+                                    contentDescription = "التذكير الآلي مفعل",
                                     tint = PendingAmber,
                                     modifier = Modifier.size(12.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "تنبيه غداً (جرب محاكاته)",
+                                    text = "تنبيه: $formattedReminder",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = PendingAmber,
                                     fontWeight = FontWeight.Bold
@@ -240,7 +238,7 @@ fun DebtItem(
                             )
                         }
                         IconButton(
-                            onClick = { viewModel.deleteDebt(debt) },
+                            onClick = { viewModel.deleteDebt(context, debt) },
                             modifier = Modifier.size(28.dp)
                         ) {
                             Icon(
@@ -254,7 +252,7 @@ fun DebtItem(
                 } else {
                     // Simple Delete icon even for paid debts history database cleanup
                     IconButton(
-                        onClick = { viewModel.deleteDebt(debt) },
+                        onClick = { viewModel.deleteDebt(context, debt) },
                         modifier = Modifier.size(28.dp)
                     ) {
                         Icon(

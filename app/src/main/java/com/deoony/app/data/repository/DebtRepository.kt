@@ -40,6 +40,10 @@ class DebtRepository(
         return debtDao.insertDebt(debt)
     }
 
+    suspend fun getDebtById(id: Int): DebtEntity? {
+        return debtDao.getDebtById(id)
+    }
+
     suspend fun updateDebt(debt: DebtEntity) {
         debtDao.updateDebt(debt)
     }
